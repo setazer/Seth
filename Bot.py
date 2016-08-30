@@ -16,18 +16,34 @@ from argparse import ArgumentParser
 import slixmpp
 import sys
 
-def say_handler(bot,msg,cmd):
+
+def say_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):]
     bot.send_message(mto=msg['from'].bare,
-                              mbody=param.lstrip(),
-                              mtype='groupchat')
+                     mbody=param.lstrip(),
+                     mtype='groupchat')
 
-def exec_handler(bot,msg,cmd):
+
+def exec_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):]
-    exec(param.lstrip())
 
-def exit_handler(bot,msg,cmd):
+    if slixmpp.JID(bot.plugin['xep_0045'].getJidProperty(msg['from'].bare, msg['mucnick'], 'jid')).bare in bot.admins:
+        try:
+            exec(param.lstrip(), globals(),locals())
+        except Exception as e:
+            bot.send_message(mto=msg['from'].bare,
+                             mbody=e.args[0],
+                             mtype='groupchat')
+    else:
+        bot.send_message(mto=msg['from'].bare,
+                         mbody='ACCESS DENIED!',
+                         mtype='groupchat')
+
+
+def exit_handler(bot, msg, cmd):
+    bot.disconnect()
     sys.exit()
+
 
 class MUCBot(slixmpp.ClientXMPP):
     """
@@ -41,7 +57,7 @@ class MUCBot(slixmpp.ClientXMPP):
         self.commands = {}
         self.room = room
         self.nick = nick
-
+        self.admins = ADMINS
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to
@@ -86,7 +102,7 @@ class MUCBot(slixmpp.ClientXMPP):
     def hasCommand(self, msg, cmd):
         if msg['body'].startswith(self.nick + ': '):
             print(msg['body'] + '2' + msg['mucnick'])
-            msg['body']=msg['body'].replace(self.nick + ': ', '', 1)
+            msg['body'] = msg['body'].replace(self.nick + ': ', '', 1)
             print(msg['body'] + '3')
         return msg['body'].startswith(cmd)
 
@@ -97,13 +113,12 @@ class MUCBot(slixmpp.ClientXMPP):
         # Plugin commands handler
         for cmd in self.commands:
             if self.hasCommand(msg, cmd):
-                self.commands[cmd](self,msg,cmd)
+                self.commands[cmd](self, msg, cmd)
 
         if self.nick in msg['body']:
             self.send_message(mto=msg['from'].bare,
                               mbody="%s: Што!?" % msg['mucnick'],
                               mtype='groupchat')
-
 
     def muc_online(self, presence):
         """
@@ -123,8 +138,9 @@ class MUCBot(slixmpp.ClientXMPP):
                                                       presence['muc']['nick']),
                               mtype='groupchat')
 
-    def register_cmd_handler(self,handler,cmd):
-        self.commands[cmd]=handler
+    def register_cmd_handler(self, handler, cmd):
+        self.commands[cmd] = handler
+
 
 def main():
     # Setup the hasCommand line arguments.
@@ -152,7 +168,7 @@ def main():
     xmpp.register_plugin('xep_0045')  # Multi-User Chat
     xmpp.register_plugin('xep_0199')  # XMPP Ping
 
-    xmpp.register_cmd_handler(say_handler,'.say')
+    xmpp.register_cmd_handler(say_handler, '.say')
     xmpp.register_cmd_handler(exec_handler, '.exec')
     xmpp.register_cmd_handler(exit_handler, '.exit')
     # Connect to the XMPP server and start processing XMPP stanzas.
