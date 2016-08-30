@@ -16,6 +16,18 @@ from argparse import ArgumentParser
 import slixmpp
 import sys
 
+def say_handler(bot,msg,cmd):
+    param = msg['body'][len(cmd):]
+    bot.send_message(mto=msg['from'].bare,
+                              mbody=param.lstrip(),
+                              mtype='groupchat')
+
+def exec_handler(bot,msg,cmd):
+    param = msg['body'][len(cmd):]
+    exec(param.lstrip())
+
+def exit_handler(bot,msg,cmd):
+    sys.exit()
 
 class MUCBot(slixmpp.ClientXMPP):
     """
@@ -72,48 +84,26 @@ class MUCBot(slixmpp.ClientXMPP):
                                         wait=True)
 
     def hasCommand(self, msg, cmd):
-        if msg['body'].startswith(msg['mucnick'] + ': '):
-            msg['body'].replace(msg['mucnick'] + ': ', '', 1)
+        if msg['body'].startswith(self.nick + ': '):
+            print(msg['body'] + '2' + msg['mucnick'])
+            msg['body']=msg['body'].replace(self.nick + ': ', '', 1)
+            print(msg['body'] + '3')
         return msg['body'].startswith(cmd)
 
-
     def muc_message(self, msg):
-        #Ignore self messages
+        # Ignore self messages
         if msg['mucnick'] == self.nick: return
 
-        #Plugin commands handler
+        # Plugin commands handler
         for cmd in self.commands:
-            if self.hasCommand(msg,cmd):
-                self.commands[cmd](msg)
+            if self.hasCommand(msg, cmd):
+                self.commands[cmd](self,msg,cmd)
 
         if self.nick in msg['body']:
             self.send_message(mto=msg['from'].bare,
-                              mbody="%s:Што!?" % msg['mucnick'],
+                              mbody="%s: Што!?" % msg['mucnick'],
                               mtype='groupchat')
-            print(msg)
-        splitmsg = msg['body'].split(' ')
-        firstword = splitmsg[0]
-        otherwords = ' '.join(splitmsg[1:])
-        if self.hasCommand(msg, '!say'):
-            self.send_message(mto=msg['from'].bare,
-                              mbody=otherwords,
-                              mtype='groupchat')
-        if self.hasCommand(msg, '!jir'):
-            self.send_message(mto=msg['from'].bare,
-                              mbody=self.plugin['xep_0045'].getJidProperty(msg['from'].bare, otherwords, 'jid'),
-                              mtype='groupchat')
-        if self.hasCommand(msg, '!exec'):
-            exec(otherwords)
-        if self.hasCommand(msg, '!e'):
-            try:
-                res_msg = str(exec(otherwords))
-            except Exception as e:
-                res_msg = 'Error: ' + str(e)
-            self.send_message(mto=msg['from'].bare,
-                              mbody=res_msg,
-                              mtype='groupchat')
-        if self.hasCommand(msg, '!exit'):
-            sys.exit()
+
 
     def muc_online(self, presence):
         """
@@ -133,6 +123,8 @@ class MUCBot(slixmpp.ClientXMPP):
                                                       presence['muc']['nick']),
                               mtype='groupchat')
 
+    def register_cmd_handler(self,handler,cmd):
+        self.commands[cmd]=handler
 
 def main():
     # Setup the hasCommand line arguments.
@@ -160,6 +152,9 @@ def main():
     xmpp.register_plugin('xep_0045')  # Multi-User Chat
     xmpp.register_plugin('xep_0199')  # XMPP Ping
 
+    xmpp.register_cmd_handler(say_handler,'.say')
+    xmpp.register_cmd_handler(exec_handler, '.exec')
+    xmpp.register_cmd_handler(exit_handler, '.exit')
     # Connect to the XMPP server and start processing XMPP stanzas.
     xmpp.connect()
     xmpp.process()
