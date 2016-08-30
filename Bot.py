@@ -26,7 +26,7 @@ class MUCBot(slixmpp.ClientXMPP):
 
     def __init__(self, jid, password, room, nick):
         slixmpp.ClientXMPP.__init__(self, jid, password)
-        msg_commands = []
+        self.commands = {}
         self.room = room
         self.nick = nick
 
@@ -71,29 +71,20 @@ class MUCBot(slixmpp.ClientXMPP):
                                         password=ROOM_PWD,
                                         wait=True)
 
+    def hasCommand(self, msg, cmd):
+        if msg['body'].startswith(msg['mucnick'] + ': '):
+            msg['body'].replace(msg['mucnick'] + ': ', '', 1)
+        return msg['body'].startswith(cmd)
+
+
     def muc_message(self, msg):
-        """
-        Process incoming message stanzas from any chat room. Be aware
-        that if you also have any handlers for the 'message' event,
-        message stanzas may be processed by both handlers, so check
-        the 'type' attribute when using a 'message' event handler.
-
-        Whenever the bot's nickname is mentioned, respond to
-        the message.
-
-        IMPORTANT: Always check that a message is not from yourself,
-                   otherwise you will create an infinite loop responding
-                   to your own messages.
-
-        This handler will reply to messages that mention
-        the bot's nickname.
-
-        Arguments:
-            msg -- The received message stanza. See the documentation
-                   for stanza objects and the Message stanza to see
-                   how it may be used.
-        """
+        #Ignore self messages
         if msg['mucnick'] == self.nick: return
+
+        #Plugin commands handler
+        for cmd in self.commands:
+            if self.hasCommand(msg,cmd):
+                self.commands[cmd](msg)
 
         if self.nick in msg['body']:
             self.send_message(mto=msg['from'].bare,
@@ -103,26 +94,25 @@ class MUCBot(slixmpp.ClientXMPP):
         splitmsg = msg['body'].split(' ')
         firstword = splitmsg[0]
         otherwords = ' '.join(splitmsg[1:])
-        '  asd '.strip()
-        if msg['body'].startswith('!say'):
+        if self.hasCommand(msg, '!say'):
             self.send_message(mto=msg['from'].bare,
                               mbody=otherwords,
                               mtype='groupchat')
-        if msg['body'].startswith('!jir'):
+        if self.hasCommand(msg, '!jir'):
             self.send_message(mto=msg['from'].bare,
                               mbody=self.plugin['xep_0045'].getJidProperty(msg['from'].bare, otherwords, 'jid'),
                               mtype='groupchat')
-        if msg['body'].startswith('!exec'):
+        if self.hasCommand(msg, '!exec'):
             exec(otherwords)
-        if msg['body'].startswith('!e'):
+        if self.hasCommand(msg, '!e'):
             try:
-                res_msg=str(exec(otherwords))
+                res_msg = str(exec(otherwords))
             except Exception as e:
-                res_msg='Error: ' + str(e)
+                res_msg = 'Error: ' + str(e)
             self.send_message(mto=msg['from'].bare,
                               mbody=res_msg,
                               mtype='groupchat')
-        if msg['body'].startswith('!exit'):
+        if self.hasCommand(msg, '!exit'):
             sys.exit()
 
     def muc_online(self, presence):
@@ -145,7 +135,7 @@ class MUCBot(slixmpp.ClientXMPP):
 
 
 def main():
-    # Setup the command line arguments.
+    # Setup the hasCommand line arguments.
     parser = ArgumentParser()
 
     # Output verbosity options.
