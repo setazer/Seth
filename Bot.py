@@ -27,7 +27,7 @@ import sys
 
 def say_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):]
-    bot.muc_reply(param.lstrip(), msg)
+    bot.reply(param.lstrip(), msg)
 
 
 def exec_handler(bot, msg, cmd):
@@ -37,9 +37,9 @@ def exec_handler(bot, msg, cmd):
         try:
             exec(param.lstrip(), globals(), locals())
         except Exception as e:
-            bot.muc_reply(e.args[0], msg)
+            bot.reply(e.args[0], msg)
     else:
-        bot.muc_reply('ACCESS DENIED!', msg)
+        bot.reply('ACCESS DENIED!', msg)
 
 
 def exit_handler(bot, msg, cmd):
@@ -61,13 +61,14 @@ class MUCBot(slixmpp.ClientXMPP):
         self.nick = nick
         self.admins = ADMINS
         self.room_access = {}
-        self.jid_access = {}
-        for admin in ADMINS:
-            self.jid_access[admin] = 100
-        self.roles = {'participant': 1,
+        self.jid_access = {admin: 100 for admin in ADMINS}
+        self.roles = {'none': 0,
+                      'visitor': 0,
+                      'participant': 1,
                       'moderator': 4}
 
-        self.affiliations = {'none': 1,
+        self.affiliations = {'outcast': 0,
+                             'none': 1,
                              'member': 3,
                              'admin': 5,
                              'owner': 7}
@@ -91,6 +92,8 @@ class MUCBot(slixmpp.ClientXMPP):
         # muc::room@server::got_online, or muc::room@server::got_offline.
         self.add_event_handler("muc::%s::got_online" % self.room,
                                self.muc_online)
+
+        self.add_event_handler("message", self.message)
 
     def start(self, event):
         """
@@ -120,13 +123,19 @@ class MUCBot(slixmpp.ClientXMPP):
             print(msg['body'] + '3')
         return msg['body'].startswith(cmd)
 
-    def muc_reply(self, text, msg):
-        self.send_message(mto=msg['from'].bare,
-                          mbody=text,
-                          mtype='groupchat')
+    def reply(self, text, msg):
+        if msg['type'] == 'groupchat':
+            self.send_message(mto=msg['from'].bare,
+                              mbody=text,
+                              mtype=msg['type'])
+        else:
+            self.send_message(mto=msg['from'],
+                              mbody=text,
+                              mtype=msg['type'])
 
     def muc_message(self, msg):
         # Ignore self messages
+        print(msg['mucnick'])
         if msg['mucnick'] == self.nick: return
 
         # Plugin commands handler
@@ -134,15 +143,19 @@ class MUCBot(slixmpp.ClientXMPP):
             if self.hasCommand(msg, cmd):
                 jid_access = self.room_access[msg['from'].bare.lower()][msg['from']]
                 if jid_access >= self.commands[cmd]['access']:
-                    self.commands[cmd]['handler'](self, msg, cmd, )
+                    self.commands[cmd]['handler'](self, msg, cmd)
                 else:
-                    self.muc_reply('ACCESS DENIED!', msg)
+                    self.reply('ACCESS DENIED!', msg)
 
         if self.nick in msg['body']:
-            self.muc_reply("%s: Што!?" % msg['mucnick'], msg)
+            self.reply("%s: Што!?" % msg['mucnick'], msg)
 
     def message(self, msg):
-        pass
+        print(msg['from'], msg['type'], msg['nick'].get_nick(), msg['body'])
+        # Anti-self-spam
+        if msg['type'] == 'groupchat':
+            return
+        self.reply(msg['body'],msg)
 
     def muc_online(self, presence):
         """
@@ -168,9 +181,9 @@ class MUCBot(slixmpp.ClientXMPP):
         else:
             self.room_access[room][jid] = self.roles[role] + self.affiliations[affiliation]
 
-        self.muc_reply("Hello, %s %s %s %s %s" % (role,
-                                                  affiliation,
-                                                  nick, self.room_access[room][jid], realjid), presence)
+        # self.reply("Hello, %s %s %s %s %s" % (role,
+        #                                       affiliation,
+        #                                       nick, self.room_access[room][jid], realjid), presence)
 
     def register_cmd_handler(self, handler, cmd, access=0):
         self.commands[cmd] = {'handler': handler, 'access': access}
