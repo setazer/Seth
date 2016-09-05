@@ -17,11 +17,17 @@ import slixmpp
 import sys
 
 
+#
+# def join_handler(bot, msg, cmd):
+#     param = msg['body'][len(cmd):]
+#     bot.plugin['xep_0045'].joinMUC(param,
+#                                     bot.nick,
+#                                     password=ROOM_PWD,
+#                                     wait=True)
+
 def say_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):]
-    bot.send_message(mto=msg['from'].bare,
-                     mbody=param.lstrip(),
-                     mtype='groupchat')
+    bot.muc_reply(param.lstrip(), msg)
 
 
 def exec_handler(bot, msg, cmd):
@@ -29,15 +35,11 @@ def exec_handler(bot, msg, cmd):
 
     if slixmpp.JID(bot.plugin['xep_0045'].getJidProperty(msg['from'].bare, msg['mucnick'], 'jid')).bare in bot.admins:
         try:
-            exec(param.lstrip(), globals(),locals())
+            exec(param.lstrip(), globals(), locals())
         except Exception as e:
-            bot.send_message(mto=msg['from'].bare,
-                             mbody=e.args[0],
-                             mtype='groupchat')
+            bot.muc_reply(e.args[0], msg)
     else:
-        bot.send_message(mto=msg['from'].bare,
-                         mbody='ACCESS DENIED!',
-                         mtype='groupchat')
+        bot.muc_reply('ACCESS DENIED!', msg)
 
 
 def exit_handler(bot, msg, cmd):
@@ -58,6 +60,17 @@ class MUCBot(slixmpp.ClientXMPP):
         self.room = room
         self.nick = nick
         self.admins = ADMINS
+        self.room_access = {}
+        self.jid_access = {}
+        for admin in ADMINS:
+            self.jid_access[admin] = 100
+        self.roles = {'participant': 1,
+                      'moderator': 4}
+
+        self.affiliations = {'none': 1,
+                             'member': 3,
+                             'admin': 5,
+                             'owner': 7}
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to
@@ -76,8 +89,8 @@ class MUCBot(slixmpp.ClientXMPP):
         # any presences you send yourself. To limit event handling
         # to a single room, use the events muc::room@server::presence,
         # muc::room@server::got_online, or muc::room@server::got_offline.
-        # self.add_event_handler("muc::%s::got_online" % self.room,
-        #                       self.muc_online)
+        self.add_event_handler("muc::%s::got_online" % self.room,
+                               self.muc_online)
 
     def start(self, event):
         """
@@ -98,6 +111,7 @@ class MUCBot(slixmpp.ClientXMPP):
                                         self.nick,
                                         password=ROOM_PWD,
                                         wait=True)
+        self.room_access[ROOM.lower()] = {}
 
     def hasCommand(self, msg, cmd):
         if msg['body'].startswith(self.nick + ': '):
@@ -106,6 +120,11 @@ class MUCBot(slixmpp.ClientXMPP):
             print(msg['body'] + '3')
         return msg['body'].startswith(cmd)
 
+    def muc_reply(self, text, msg):
+        self.send_message(mto=msg['from'].bare,
+                          mbody=text,
+                          mtype='groupchat')
+
     def muc_message(self, msg):
         # Ignore self messages
         if msg['mucnick'] == self.nick: return
@@ -113,12 +132,17 @@ class MUCBot(slixmpp.ClientXMPP):
         # Plugin commands handler
         for cmd in self.commands:
             if self.hasCommand(msg, cmd):
-                self.commands[cmd](self, msg, cmd)
+                jid_access = self.room_access[msg['from'].bare.lower()][msg['from']]
+                if jid_access >= self.commands[cmd]['access']:
+                    self.commands[cmd]['handler'](self, msg, cmd, )
+                else:
+                    self.muc_reply('ACCESS DENIED!', msg)
 
         if self.nick in msg['body']:
-            self.send_message(mto=msg['from'].bare,
-                              mbody="%s: Што!?" % msg['mucnick'],
-                              mtype='groupchat')
+            self.muc_reply("%s: Што!?" % msg['mucnick'], msg)
+
+    def message(self, msg):
+        pass
 
     def muc_online(self, presence):
         """
@@ -132,14 +156,24 @@ class MUCBot(slixmpp.ClientXMPP):
                         documentation for the Presence stanza
                         to see how else it may be used.
         """
-        if presence['muc']['nick'] != self.nick:
-            self.send_message(mto=presence['from'].bare,
-                              mbody="Hello, %s %s" % (presence['muc']['role'],
-                                                      presence['muc']['nick']),
-                              mtype='groupchat')
 
-    def register_cmd_handler(self, handler, cmd):
-        self.commands[cmd] = handler
+        room = presence['from'].bare.lower()
+        jid = presence['from']
+        nick = presence['muc']['nick']
+        role = presence['muc']['role']
+        affiliation = presence['muc']['affiliation']
+        realjid = slixmpp.JID(self.plugin['xep_0045'].getJidProperty(room, nick, 'jid')).bare
+        if realjid and realjid in self.jid_access:
+            self.room_access[room][jid] = self.jid_access[realjid]
+        else:
+            self.room_access[room][jid] = self.roles[role] + self.affiliations[affiliation]
+
+        self.muc_reply("Hello, %s %s %s %s %s" % (role,
+                                                  affiliation,
+                                                  nick, self.room_access[room][jid], realjid), presence)
+
+    def register_cmd_handler(self, handler, cmd, access=0):
+        self.commands[cmd] = {'handler': handler, 'access': access}
 
 
 def main():
@@ -168,9 +202,9 @@ def main():
     xmpp.register_plugin('xep_0045')  # Multi-User Chat
     xmpp.register_plugin('xep_0199')  # XMPP Ping
 
-    xmpp.register_cmd_handler(say_handler, '.say')
-    xmpp.register_cmd_handler(exec_handler, '.exec')
-    xmpp.register_cmd_handler(exit_handler, '.exit')
+    xmpp.register_cmd_handler(say_handler, '.say', 4)
+    xmpp.register_cmd_handler(exec_handler, '.exec', 50)
+    xmpp.register_cmd_handler(exit_handler, '.exit', 11)
     # Connect to the XMPP server and start processing XMPP stanzas.
     xmpp.connect()
     xmpp.process()
