@@ -21,16 +21,15 @@
 
 import os
 import sys
-import config
-
-PLUGINS_DIR = config.PLUGINS_DIR
 
 
 class pluginloader:
     def __init__(self, bot):
         self.bot = bot
         self.env = bot.env
-        self.pluginlist = os.listdir(PLUGINS_DIR)
+        self.plugin_dir = bot.config.PLUGINS_DIR
+        self.sqlite = bot.config.ENABLE_SQLITE
+        self.pluginlist = os.listdir(bot.config.PLUGINS_DIR)
 
     def load_all(self):
         sys.stdout.write('Loading plugins: ')
@@ -39,14 +38,15 @@ class pluginloader:
         print(' done.')
 
     def load(self, p):
-        tl = os.listdir(PLUGINS_DIR + '/' + p)
+
+        tl = os.listdir(self.plugin_dir + '/' + p)
         tl = [i for i in tl if i.endswith('.py')]
         for i in tl:
-            fn = '%s/%s/%s' % (PLUGINS_DIR, p, i);
+            fn = '%s/%s/%s' % (self.plugin_dir, p, i);
             fp = open(fn, 'r')
             pc = fp.read()
             fp.close()
-            if config.ENABLE_SQLITE or not pc.count('__NEED_DB__'):
+            if self.sqlite or not pc.count('__NEED_DB__'):
                 try:
                     exec(pc, self.env)
                 except:
