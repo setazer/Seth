@@ -13,25 +13,49 @@ import logging
 from pluginloader import pluginloader
 import slixmpp
 import sys
+import sqlite3
 
 
 def join_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):].split()
-    if len(param) == 2:
+    try:
         jid, nick = param[0].split('/')
+    except ValueError:
+        jid, nick = (param[0], bot.nick)
+    except IndexError:
+        return
+
+    try:
+        pwd = param[1]
+    except IndexError:
+        pwd = ''
+    bot.add_event_handler("muc::%s::got_online" % jid,
+                          bot.muc_online)
+    if pwd:
+
         bot.plugin['xep_0045'].joinMUC(jid,
                                        nick,
-                                       password=param[1],
+                                       password=pwd,
                                        wait=True)
-        bot.room_settings[slixmpp.JID(jid).bare.lower()] = {'access': {}}
-        bot.add_event_handler("muc::%s::got_online" % jid,
-                              bot.muc_online)
+    else:
+        bot.plugin['xep_0045'].joinMUC(jid,
+                                       nick,
+                                       wait=True)
+
+    room=slixmpp.JID(jid).bare.lower()
+    bot.room_settings[room] = {'access': {}, 'autologin': 1, 'nick': nick}
+    if param[1]:
+        bot.room_settings[room]['pwd']=param[1]
+
 
 
 def exec_handler(bot, msg, cmd):
     param = msg['body'][len(cmd):]
-
-    if slixmpp.JID(bot.plugin['xep_0045'].getJidProperty(msg['from'].bare, msg['mucnick'], 'jid')).bare in bot.admins:
+    if msg['type'] == 'groupchat':
+        fromjid = slixmpp.JID(bot.plugin['xep_0045'].getJidProperty(msg['from'].bare, msg['mucnick'], 'jid')).bare
+    else:
+        fromjid = msg['from'].bare
+    if fromjid in bot.config.ADMINS:
         try:
             exec(param.lstrip(), globals(), locals())
         except Exception as e:
@@ -41,8 +65,8 @@ def exec_handler(bot, msg, cmd):
 
 
 def exit_handler(bot, msg, cmd):
+    bot.reply('Shutting down.',msg)
     bot.disconnect()
-    sys.exit()
 
 
 class sethbot(slixmpp.ClientXMPP):
@@ -69,11 +93,12 @@ class sethbot(slixmpp.ClientXMPP):
         self.commands = {}
         self.env = config.env
         self.config = config
+        self.db = sqlite3.connect(config.DBNAME)
         self.nick = config.NICK
         self.room_settings = {}
         self.plug = pluginloader(self)
         self.jid_access = {admin: 100 for admin in config.ADMINS}
-
+        self.init_settings()
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to
@@ -95,6 +120,8 @@ class sethbot(slixmpp.ClientXMPP):
 
         self.add_event_handler("message", self.message)
 
+        self.add_event_handler("disconnected", self.end)
+
     def start(self, event):
         """
         Process the session_start event.
@@ -114,6 +141,27 @@ class sethbot(slixmpp.ClientXMPP):
         self.register_cmd_handler(exec_handler, '.exec', 50)
         self.register_cmd_handler(exit_handler, '.exit', 11)
         self.register_cmd_handler(join_handler, '.join', 50)
+        self.autologin()
+
+    def end(self, event):
+        self.save_settings()
+        self.db.close()
+        sys.exit(0)
+
+    def autologin(self):
+        print(self.room_settings)
+        for room in self.room_settings:
+            if self.room_settings[room]['autologin']:
+                pwd = self.room_settings[room].get('pwd')
+                if pwd:
+                    self.plugin['xep_0045'].joinMUC(room,
+                                                    self.room_settings[room]['nick'],
+                                                    password=pwd,
+                                                    wait=True)
+                else:
+                    self.plugin['xep_0045'].joinMUC(room,
+                                                    self.room_settings[room]['nick'],
+                                                    wait=True)
 
     def hasCommand(self, msg, cmd):
         if msg['body'].startswith(self.nick + ': '):
@@ -125,12 +173,52 @@ class sethbot(slixmpp.ClientXMPP):
             self.send_message(mto=msg['from'].bare,
                               mbody=text,
                               mtype='groupchat')
+
         elif msg['type'] in ['normal', 'chat']:
             self.send_message(mto=msg['from'],
                               mbody=text,
                               mtype=msg['type'])
         else:  # presence
             logging.log(logging.DEBUG, str(msg))
+
+    def init_settings(self):
+        cur = self.db.cursor()
+        cur.execute('CREATE TABLE IF NOT EXISTS room_settings'
+                    ' (id INTEGER PRIMARY KEY, room TEXT, setting TEXT, value TEXT)')
+        cur.execute('CREATE TABLE IF NOT EXISTS jid_access'
+                    ' (id INTEGER PRIMARY KEY, jid TEXT, access INTEGER)')
+        settings = cur.execute('SELECT room, setting, value FROM room_settings')
+        for row in settings:
+            if not self.room_settings.get(row[0]):
+                self.room_settings[row[0]] = {} # Add room
+            self.room_settings[row[0]][row[1]] = row[2] # Add setting
+        print(self.room_settings)
+        jid_access = cur.execute('SELECT jid, access FROM jid_access')
+        for row in jid_access:
+            self.jid_access[row[0]]=row[1]
+        print(self.jid_access)
+        cur.close()
+
+    def save_settings(self):
+        cur = self.db.cursor()
+        rows = []
+        for room in self.room_settings:
+            for setting in self.room_settings[room]:
+                if not setting == 'access':
+                    value = self.room_settings[room][setting]
+                    rows.append((room,setting,room,setting,value))
+        print(rows)
+        cur.executemany('INSERT OR REPLACE INTO room_settings VALUES'
+                        '(COALESCE((SELECT id FROM room_settings WHERE room=? and setting =?),NULL),?,?,?)',rows)
+        rows = []
+        for jid in self.jid_access:
+            access=self.jid_access[jid]
+            rows.append((jid,jid,access))
+        print(rows)
+        cur.executemany('INSERT OR REPLACE INTO jid_access VALUES'
+                        '(COALESCE((SELECT id FROM jid_access WHERE jid=?),NULL),?,?)', rows)
+        self.db.commit()
+        cur.close()
 
     def muc_message(self, msg):
         # Ignore self messages

@@ -31,8 +31,6 @@ bot.register_plugin('xep_0030')  # Service Discovery
 bot.register_plugin('xep_0045')  # Multi-User Chat
 bot.register_plugin('xep_0199')  # XMPP Ping
 bot.plug.load_all()
-
-
 # Connect to the XMPP server and start processing XMPP stanzas.
 bot.connect()
 bot.process()
