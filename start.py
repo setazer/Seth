@@ -1,5 +1,5 @@
 import logging
-from seth import sethbot
+from seth import SethBot
 import config
 from argparse import ArgumentParser
 
@@ -26,7 +26,7 @@ logging.basicConfig(format='%(levelname)-8s %(message)s',
 # not matter.
 config.init(args.config)
 config.env=globals()
-bot = sethbot(config)
+bot = SethBot(config)
 bot.register_plugin('xep_0030')  # Service Discovery
 bot.register_plugin('xep_0045')  # Multi-User Chat
 bot.register_plugin('xep_0199')  # XMPP Ping

@@ -12,7 +12,7 @@
 import logging
 from pluginloader import pluginloader
 import slixmpp
-import sys
+# import sys
 import sqlite3
 
 
@@ -44,8 +44,22 @@ def join_handler(bot, msg, cmd):
 
     room = slixmpp.JID(jid).bare.lower()
     bot.room_settings[room] = {'access': {}, 'autologin': 1, 'nick': nick}
-    if param[1]:
-        bot.room_settings[room]['pwd'] = param[1]
+    if pwd:
+        bot.room_settings[room]['pwd'] = pwd
+
+
+def leave_handler(bot, msg, cmd):
+    param = msg['body'][len(cmd):]
+    if param:
+        if param in bot.room_settings:
+            bot.plugin['xep_0045'].leaveMUC(param, bot.room_settings[param]['nick'], msg='Leaving')
+            bot.room_settings[param]['autologin'] = 0
+            bot.del_event_handler("muc::%s::got_online" % param, bot.muc_online)
+    elif msg['type'] == 'groupchat':
+        room = msg['from'].bare
+        bot.plugin['xep_0045'].leaveMUC(room, bot.room_settings[room]['nick'],  msg='Leaving')
+        bot.room_settings[room]['autologin'] = 0
+        bot.del_event_handler("muc::%s::got_online" % room, bot.muc_online)
 
 
 def exec_handler(bot, msg, cmd):
@@ -64,11 +78,12 @@ def exec_handler(bot, msg, cmd):
 
 
 def exit_handler(bot, msg, cmd):
-    bot.reply('Shutting down.', msg)
-    bot.disconnect()
+    for room in bot.room_settings:
+        bot.plugin['xep_0045'].leaveMUC(room, bot.room_settings[room]['nick'], msg='Shutting down')
+    bot.disconnect(wait=True)
 
 
-class sethbot(slixmpp.ClientXMPP):
+class SethBot(slixmpp.ClientXMPP):
     """
     A simple Slixmpp bot that will greets those
     who enter the room, and acknowledge any messages
@@ -119,7 +134,7 @@ class sethbot(slixmpp.ClientXMPP):
 
         self.add_event_handler("message", self.message)
 
-        self.add_event_handler("disconnected", self.end)
+        self.add_event_handler("session_end", self.end)
 
     def start(self, event):
         """
@@ -140,16 +155,16 @@ class sethbot(slixmpp.ClientXMPP):
         self.register_cmd_handler(exec_handler, '.exec', 50)
         self.register_cmd_handler(exit_handler, '.exit', 11)
         self.register_cmd_handler(join_handler, '.join', 50)
+        self.register_cmd_handler(leave_handler, '.leave', 50)
         self.init_settings()
         self.autologin()
 
     def end(self, event):
         self.save_settings()
         self.db.close()
-        sys.exit(0)
+        # sys.exit(0)
 
     def autologin(self):
-        print(self.room_settings)
         for room in self.room_settings:
             if self.room_settings[room]['autologin']:
                 pwd = self.room_settings[room].get('pwd')
@@ -166,8 +181,11 @@ class sethbot(slixmpp.ClientXMPP):
                 self.add_event_handler("muc::%s::got_online" % room,
                                        self.muc_online)
 
-    def hasCommand(self, msg, cmd):
-        bot_nick = self.room_settings[msg['from'].bare.lower()]['nick']
+    def has_command(self, msg, cmd):
+        if msg['type'] == 'groupchat':
+            bot_nick = self.room_settings[msg['from'].bare.lower()]['nick']
+        else:
+            bot_nick = self.nick
         if msg['body'].startswith(bot_nick + ': '):
             msg['body'] = msg['body'].replace(bot_nick + ': ', '', 1)
         return msg['body'].startswith(cmd)
@@ -196,11 +214,9 @@ class sethbot(slixmpp.ClientXMPP):
             if not self.room_settings.get(row[0]):
                 self.room_settings[row[0]] = {}  # Add room
             self.room_settings[row[0]][row[1]] = row[2]  # Add setting
-        print(self.room_settings)
         jid_access = cur.execute('SELECT jid, access FROM jid_access')
         for row in jid_access:
             self.jid_access[row[0]] = row[1]
-        print(self.jid_access)
         cur.close()
 
     def save_settings(self):
@@ -211,14 +227,12 @@ class sethbot(slixmpp.ClientXMPP):
                 if not setting == 'access':
                     value = self.room_settings[room][setting]
                     rows.append((room, setting, room, setting, value))
-        print(rows)
         cur.executemany('INSERT OR REPLACE INTO room_settings VALUES'
                         '(COALESCE((SELECT id FROM room_settings WHERE room=? and setting =?),NULL),?,?,?)', rows)
         rows = []
         for jid in self.jid_access:
             access = self.jid_access[jid]
             rows.append((jid, jid, access))
-        print(rows)
         cur.executemany('INSERT OR REPLACE INTO jid_access VALUES'
                         '(COALESCE((SELECT id FROM jid_access WHERE jid=?),NULL),?,?)', rows)
         self.db.commit()
@@ -231,8 +245,7 @@ class sethbot(slixmpp.ClientXMPP):
 
         # Plugin commands handler
         for cmd in self.commands:
-            if self.hasCommand(msg, cmd):
-                print(self.room_settings)
+            if self.has_command(msg, cmd):
                 jid_access = self.room_settings[msg['from'].bare.lower()]['access'][msg['from']]
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
@@ -247,7 +260,7 @@ class sethbot(slixmpp.ClientXMPP):
         if msg['type'] == 'groupchat':
             return
         for cmd in self.commands:
-            if self.hasCommand(msg, cmd):
+            if self.has_command(msg, cmd):
                 jid_access = self.jid_access[msg['from'].bare.lower()]
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
