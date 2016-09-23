@@ -42,11 +42,10 @@ def join_handler(bot, msg, cmd):
                                        nick,
                                        wait=True)
 
-    room=slixmpp.JID(jid).bare.lower()
+    room = slixmpp.JID(jid).bare.lower()
     bot.room_settings[room] = {'access': {}, 'autologin': 1, 'nick': nick}
     if param[1]:
-        bot.room_settings[room]['pwd']=param[1]
-
+        bot.room_settings[room]['pwd'] = param[1]
 
 
 def exec_handler(bot, msg, cmd):
@@ -65,7 +64,7 @@ def exec_handler(bot, msg, cmd):
 
 
 def exit_handler(bot, msg, cmd):
-    bot.reply('Shutting down.',msg)
+    bot.reply('Shutting down.', msg)
     bot.disconnect()
 
 
@@ -98,7 +97,7 @@ class sethbot(slixmpp.ClientXMPP):
         self.room_settings = {}
         self.plug = pluginloader(self)
         self.jid_access = {admin: 100 for admin in config.ADMINS}
-        self.init_settings()
+
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to
@@ -141,6 +140,7 @@ class sethbot(slixmpp.ClientXMPP):
         self.register_cmd_handler(exec_handler, '.exec', 50)
         self.register_cmd_handler(exit_handler, '.exit', 11)
         self.register_cmd_handler(join_handler, '.join', 50)
+        self.init_settings()
         self.autologin()
 
     def end(self, event):
@@ -162,10 +162,14 @@ class sethbot(slixmpp.ClientXMPP):
                     self.plugin['xep_0045'].joinMUC(room,
                                                     self.room_settings[room]['nick'],
                                                     wait=True)
+                self.room_settings[room]['access'] = {}
+                self.add_event_handler("muc::%s::got_online" % room,
+                                       self.muc_online)
 
     def hasCommand(self, msg, cmd):
-        if msg['body'].startswith(self.nick + ': '):
-            msg['body'] = msg['body'].replace(self.nick + ': ', '', 1)
+        bot_nick = self.room_settings[msg['from'].bare.lower()]['nick']
+        if msg['body'].startswith(bot_nick + ': '):
+            msg['body'] = msg['body'].replace(bot_nick + ': ', '', 1)
         return msg['body'].startswith(cmd)
 
     def reply(self, text, msg):
@@ -190,12 +194,12 @@ class sethbot(slixmpp.ClientXMPP):
         settings = cur.execute('SELECT room, setting, value FROM room_settings')
         for row in settings:
             if not self.room_settings.get(row[0]):
-                self.room_settings[row[0]] = {} # Add room
-            self.room_settings[row[0]][row[1]] = row[2] # Add setting
+                self.room_settings[row[0]] = {}  # Add room
+            self.room_settings[row[0]][row[1]] = row[2]  # Add setting
         print(self.room_settings)
         jid_access = cur.execute('SELECT jid, access FROM jid_access')
         for row in jid_access:
-            self.jid_access[row[0]]=row[1]
+            self.jid_access[row[0]] = row[1]
         print(self.jid_access)
         cur.close()
 
@@ -206,14 +210,14 @@ class sethbot(slixmpp.ClientXMPP):
             for setting in self.room_settings[room]:
                 if not setting == 'access':
                     value = self.room_settings[room][setting]
-                    rows.append((room,setting,room,setting,value))
+                    rows.append((room, setting, room, setting, value))
         print(rows)
         cur.executemany('INSERT OR REPLACE INTO room_settings VALUES'
-                        '(COALESCE((SELECT id FROM room_settings WHERE room=? and setting =?),NULL),?,?,?)',rows)
+                        '(COALESCE((SELECT id FROM room_settings WHERE room=? and setting =?),NULL),?,?,?)', rows)
         rows = []
         for jid in self.jid_access:
-            access=self.jid_access[jid]
-            rows.append((jid,jid,access))
+            access = self.jid_access[jid]
+            rows.append((jid, jid, access))
         print(rows)
         cur.executemany('INSERT OR REPLACE INTO jid_access VALUES'
                         '(COALESCE((SELECT id FROM jid_access WHERE jid=?),NULL),?,?)', rows)
@@ -222,18 +226,20 @@ class sethbot(slixmpp.ClientXMPP):
 
     def muc_message(self, msg):
         # Ignore self messages
-        if msg['mucnick'] == self.nick: return
+        bot_nick = self.room_settings[msg['from'].bare.lower()]['nick']
+        if msg['mucnick'] == bot_nick: return
 
         # Plugin commands handler
         for cmd in self.commands:
             if self.hasCommand(msg, cmd):
+                print(self.room_settings)
                 jid_access = self.room_settings[msg['from'].bare.lower()]['access'][msg['from']]
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
                 else:
                     self.reply('ACCESS DENIED!', msg)
 
-        if self.nick in msg['body']:
+        if bot_nick in msg['body']:
             self.reply("%s: Што!?" % msg['mucnick'], msg)
 
     def message(self, msg):
