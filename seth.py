@@ -238,6 +238,11 @@ class SethBot(slixmpp.ClientXMPP):
         self.db.commit()
         cur.close()
 
+
+    def isConference(self,jid):
+        return jid in self.room_settings
+
+
     def muc_message(self, msg):
         # Ignore self messages
         bot_nick = self.room_settings[msg['from'].bare.lower()]['nick']
@@ -261,7 +266,10 @@ class SethBot(slixmpp.ClientXMPP):
             return
         for cmd in self.commands:
             if self.has_command(msg, cmd):
-                jid_access = self.jid_access[msg['from'].bare.lower()]
+                if self.isConference(msg['from'].bare):
+                    jid_access = self.room_settings[msg['from'].bare]['access'][msg['from']]
+                else:
+                    jid_access = self.jid_access.get(msg['from'].bare.lower(),0)
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
                 else:
@@ -290,9 +298,10 @@ class SethBot(slixmpp.ClientXMPP):
             self.room_settings[room]['access'][jid] = self.jid_access[realjid]
         else:
             self.room_settings[room]['access'][jid] = self.roles[role] + self.affiliations[affiliation]
-        self.reply("Hello, %s %s %s %s %s" % (role,
-                                              affiliation,
-                                              nick, self.room_settings[room]['access'][jid], realjid), presence)
+        print('Detected: ',role,affiliation,nick)
+        # self.reply("Hello, %s %s %s %s %s" % (role,
+        #                                       affiliation,
+        #                                       nick, self.room_settings[room]['access'][jid], realjid), presence)
 
     def register_cmd_handler(self, handler, cmd, access=2):
         self.commands[cmd] = {'handler': handler, 'access': access}
