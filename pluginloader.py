@@ -42,7 +42,7 @@ class pluginloader:
         tl = os.listdir(self.plugin_dir + '/' + p)
         tl = [i for i in tl if i.endswith('.py')]
         for i in tl:
-            fn = '%s/%s/%s' % (self.plugin_dir, p, i);
+            fn = '%s/%s/%s' % (self.plugin_dir, p, i)
             fp = open(fn, 'r', encoding='utf-8')
             pc = fp.read()
             fp.close()
