@@ -43,7 +43,7 @@ class pluginloader:
         tl = [i for i in tl if i.endswith('.py')]
         for i in tl:
             fn = '%s/%s/%s' % (self.plugin_dir, p, i);
-            fp = open(fn, 'r')
+            fp = open(fn, 'r', encoding='utf-8')
             pc = fp.read()
             fp.close()
             if self.sqlite or not pc.count('__NEED_DB__'):
