@@ -12,7 +12,7 @@ def exec_handler(bot, msg, cmd):
         except Exception as e:
             bot.reply(e.args[0], msg)
     else:
-        bot.reply('ACCESS DENIED!', msg)
+        bot.reply('access_denied', msg, True)
 
 
 def exit_handler(bot, msg, cmd):
@@ -21,4 +21,4 @@ def exit_handler(bot, msg, cmd):
     bot.disconnect(wait=True)
 
 bot.register_cmd_handler(exec_handler, '.exec', 50)
-bot.register_cmd_handler(exit_handler, '.exit', 11)
+bot.register_cmd_handler(exit_handler, '.exit', 50)

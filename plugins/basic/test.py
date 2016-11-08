@@ -1,5 +1,5 @@
 def test_handler(bot, msg, cmd):
-    bot.reply('Passed', msg)
+    bot.reply('passed', msg, True)
 
 bot.register_cmd_handler(test_handler, '.test')
 

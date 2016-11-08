@@ -48,7 +48,7 @@ class SethBot(slixmpp.ClientXMPP):
         self.room_settings = tree()
         self.plug = pluginloader(self)
         self.jid_access = {admin: 100 for admin in config.ADMINS}
-
+        self.default_lang = 'ru'
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
         # and the XML streams are ready for use. We want to
@@ -88,7 +88,6 @@ class SethBot(slixmpp.ClientXMPP):
         self.get_roster()
         self.send_presence()
 
-
         self.init_settings()
         self.autologin()
 
@@ -122,16 +121,22 @@ class SethBot(slixmpp.ClientXMPP):
             msg['body'] = msg['body'].replace(bot_nick + ': ', '', 1)
         return msg['body'].startswith(cmd)
 
-    def reply(self, text, msg):
+    def reply(self, text, msg, special=False):
+        from_conf = self.isConference(msg['from'].bare)
+        if from_conf:
+            room_lang = self.room_settings[msg['from'].bare]['lang']
         if msg['type'] == 'groupchat' or msg.__class__ is slixmpp.Presence:
+
             self.send_message(mto=msg['from'].bare,
-                              mbody=text,
+                              mbody=text if not special else self.lang[room_lang][text],
                               mtype='groupchat')
 
         elif msg['type'] in ['normal', 'chat']:
             self.send_message(mto=msg['from'],
-                              mbody=text,
+                              mbody=text if not special else
+                                    self.lang[room_lang if from_conf else self.default_lang][text],
                               mtype=msg['type'])
+
         else:
             logging.log(logging.DEBUG, str(msg))
 
@@ -144,7 +149,7 @@ class SethBot(slixmpp.ClientXMPP):
         settings = cur.execute('SELECT room, setting, value FROM room_settings')
         for row in settings:
             if not self.room_settings.get(row[0]):
-                self.room_settings[row[0]] = {}  # Add room
+                self.room_settings[row[0]]  # Add room
             self.room_settings[row[0]][row[1]] = row[2]  # Add setting
         jid_access = cur.execute('SELECT jid, access FROM jid_access')
         for row in jid_access:
@@ -170,10 +175,8 @@ class SethBot(slixmpp.ClientXMPP):
         self.db.commit()
         cur.close()
 
-
-    def isConference(self,jid):
+    def isConference(self, jid):
         return jid in self.room_settings
-
 
     def muc_message(self, msg):
         # Ignore self messages
@@ -201,7 +204,7 @@ class SethBot(slixmpp.ClientXMPP):
                 if self.isConference(msg['from'].bare):
                     jid_access = self.room_settings[msg['from'].bare]['access'][msg['from']]
                 else:
-                    jid_access = self.jid_access.get(msg['from'].bare.lower(),0)
+                    jid_access = self.jid_access.get(msg['from'].bare.lower(), 0)
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
                 else:
@@ -230,7 +233,7 @@ class SethBot(slixmpp.ClientXMPP):
             self.room_settings[room]['access'][jid] = self.jid_access[realjid]
         else:
             self.room_settings[room]['access'][jid] = self.roles[role] + self.affiliations[affiliation]
-        print('Detected: ',role,affiliation,nick)
+        print('Detected: ', role, affiliation, nick)
         # self.reply("Hello, %s %s %s %s %s" % (role,
         #                                       affiliation,
         #                                       nick, self.room_settings[room]['access'][jid], realjid), presence)

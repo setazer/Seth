@@ -30,6 +30,7 @@ def join_handler(bot, msg, cmd):
     bot.room_settings[room]['access'] # mention key to automatically create it with empty value
     bot.room_settings[room]['autologin'] = 1
     bot.room_settings[room]['nick'] = nick
+    bot.room_settings[room]['lang'] = bot.default_lang
     if pwd:
         bot.room_settings[room]['pwd'] = pwd
 
