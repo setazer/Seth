@@ -1,10 +1,9 @@
-import sys
-
+import logging
 defaults = './config.defaults'
 
 
 def parse(conf):
-    cfg = open(conf, 'r').read()
+    cfg = open(conf, 'r', encoding='utf-8').read()
     exec(cfg, globals())
 
 
@@ -12,10 +11,10 @@ def init(conf):
     try:
         parse(defaults)
     except:
-        sys.stderr.write('can\'t parse config.defaults: <%s>\n' % (defaults,))
+        logging.log(logging.FATAL,"Can't parse config.defaults: <%s>\n" % (defaults,))
         raise
     try:
         parse(conf)
     except:
-        sys.stderr.write('can\'t parse configuration file: <%s>\n' % (conf,))
+        logging.log(logging.FATAL,"Can't parse configuration file: <%s>\n" % (conf,))
         raise

@@ -21,7 +21,7 @@
 
 import os
 import sys
-
+import logging
 
 class pluginloader:
     def __init__(self, bot):
@@ -32,10 +32,10 @@ class pluginloader:
         self.pluginlist = os.listdir(bot.config.PLUGINS_DIR)
 
     def load_all(self):
-        sys.stdout.write('Loading plugins: ')
+        logging.log(logging.INFO,'Loading Bot Plugins: ')
         for i in self.pluginlist:
             self.load(i)
-        print(' done.')
+        logging.log(logging.INFO,'Loading Complete')
 
     def load(self, p):
 
@@ -50,9 +50,9 @@ class pluginloader:
                 try:
                     exec(pc, self.env)
                 except:
-                    sys.stderr.write('\nCan\'t load plugin %s:\n' % (fn,))
+                    logging.log(logging.ERROR,"\nCan't load plugin %s:\n" % (fn,))
                     raise
-                sys.stdout.write('+')
+                logging.log(logging.INFO,"Loaded Bot Plugin: {}/{}".format(p,i))
             else:
                 # this plugin needs database, but it is disabled
-                sys.stdout.write('s')
+                logging.log(logging.ERROR, "Cannot load {}/{}, due to disabled SQLite".format(p, i))

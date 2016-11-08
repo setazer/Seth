@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-    Slixmpp: The Slick XMPP Library
-    Copyright (C) 2010  Nathanael C. Fritz
-    This file is part of Slixmpp.
-
-    See the file LICENSE for copying permission.
-"""
-
 import logging
 from pluginloader import pluginloader
 import slixmpp
@@ -20,12 +12,6 @@ tree = lambda: defaultdict(tree)
 
 
 class SethBot(slixmpp.ClientXMPP):
-    """
-    A simple Slixmpp bot that will greets those
-    who enter the room, and acknowledge any messages
-    that mentions the bot's nickname.
-    """
-
     roles = {'none': 0,
              'visitor': 0,
              'participant': 1,
@@ -61,30 +47,10 @@ class SethBot(slixmpp.ClientXMPP):
         # register a handler for the 'message' event, MUC messages
         # will be processed by both handlers.
         self.add_event_handler("groupchat_message", self.muc_message)
-
-        # The groupchat_presence event is triggered whenever a
-        # presence stanza is received from any chat room, including
-        # any presences you send yourself. To limit event handling
-        # to a single room, use the events muc::room@server::presence,
-        # muc::room@server::got_online, or muc::room@server::got_offline.
-
         self.add_event_handler("message", self.message)
-
         self.add_event_handler("session_end", self.end)
 
     def start(self, event):
-        """
-        Process the session_start event.
-
-        Typical actions for the session_start event are
-        requesting the roster and broadcasting an initial
-        presence stanza.
-
-        Arguments:
-            event -- An empty dictionary. The session_start
-                     event does not provide any additional
-                     data.
-        """
         self.get_roster()
         self.send_presence()
 
@@ -190,15 +156,11 @@ class SethBot(slixmpp.ClientXMPP):
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
                 else:
-                    self.reply('ACCESS DENIED!', msg)
-
-        if bot_nick in msg['body']:
-            self.reply("%s: Што!?" % msg['mucnick'], msg)
+                    self.reply('access_denied', msg, True)
 
     def message(self, msg):
         # Anti-self-spam
-        if msg['type'] == 'groupchat':
-            return
+        if msg['type'] == 'groupchat': return
         for cmd in self.commands:
             if self.has_command(msg, cmd):
                 if self.isConference(msg['from'].bare):
@@ -208,21 +170,9 @@ class SethBot(slixmpp.ClientXMPP):
                 if jid_access >= self.commands[cmd]['access']:
                     self.commands[cmd]['handler'](self, msg, cmd)
                 else:
-                    self.reply('ACCESS DENIED!', msg)
+                    self.reply('access_denied', msg, True)
 
     def muc_online(self, presence):
-        """
-        Process a presence stanza from a chat room. In this case,
-        presences from users that have just come online are
-        handled by sending a welcome message that includes
-        the user's nickname and role in the room.
-
-        Arguments:
-            presence -- The received presence stanza. See the
-                        documentation for the Presence stanza
-                        to see how else it may be used.
-        """
-
         room = presence['from'].bare.lower()
         jid = presence['from']
         nick = presence['muc']['nick']

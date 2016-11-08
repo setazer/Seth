@@ -13,6 +13,13 @@ def join_handler(bot, msg, cmd):
         pwd = param[1]
     except IndexError:
         pwd = ''
+
+    # The groupchat_presence event is triggered whenever a
+    # presence stanza is received from any chat room, including
+    # any presences you send yourself. To limit event handling
+    # to a single room, use the events muc::room@server::presence,
+    # muc::room@server::got_online, or muc::room@server::got_offline.
+
     bot.add_event_handler("muc::%s::got_online" % jid,
                           bot.muc_online)
     if pwd:
