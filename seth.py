@@ -14,9 +14,9 @@ from pluginloader import pluginloader
 import slixmpp
 # import sys
 import sqlite3
+from collections import defaultdict
 
-
-
+tree = lambda: defaultdict(tree)
 
 
 class SethBot(slixmpp.ClientXMPP):
@@ -45,7 +45,7 @@ class SethBot(slixmpp.ClientXMPP):
         self.config = config
         self.db = sqlite3.connect(config.DBNAME)
         self.nick = config.NICK
-        self.room_settings = {}
+        self.room_settings = tree()
         self.plug = pluginloader(self)
         self.jid_access = {admin: 100 for admin in config.ADMINS}
 
@@ -110,7 +110,6 @@ class SethBot(slixmpp.ClientXMPP):
                     self.plugin['xep_0045'].joinMUC(room,
                                                     self.room_settings[room]['nick'],
                                                     wait=True)
-                self.room_settings[room]['access'] = {}
                 self.add_event_handler("muc::%s::got_online" % room,
                                        self.muc_online)
 
