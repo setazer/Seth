@@ -9,4 +9,5 @@ def set_lang_handler(bot, msg, cmd):
         # TODO reply with syntax
         pass
 
-bot.register_cmd_handler(set_lang_handler, '.set_lang', 11)
+
+bot.register_cmd_handler(set_lang_handler, 'set_lang', 11)

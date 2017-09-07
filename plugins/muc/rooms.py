@@ -4,4 +4,5 @@ def rooms_handler(bot, msg, cmd):
         msg['type'] = 'chat'
         bot.reply('\n'.join(sorted(bot.room_settings)),msg)
 
-bot.register_cmd_handler(rooms_handler, '.rooms', 100)
+
+bot.register_cmd_handler(rooms_handler, 'rooms', 100)

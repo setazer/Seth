@@ -9,4 +9,5 @@ def clean_handler(bot, msg, cmd):
             time.sleep(1.7)
         bot.reply('Cleaned',msg)
 
-bot.register_cmd_handler(clean_handler, '.clean', 7)
+
+bot.register_cmd_handler(clean_handler, 'clean', 7)

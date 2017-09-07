@@ -12,6 +12,7 @@ tree = lambda: defaultdict(tree)
 
 
 class SethBot(slixmpp.ClientXMPP):
+
     roles = {'none': 0,
              'visitor': 0,
              'participant': 1,
@@ -24,7 +25,7 @@ class SethBot(slixmpp.ClientXMPP):
                     'owner': 7}
 
     def __init__(self, config):
-
+        self.prefix = '!'
         slixmpp.ClientXMPP.__init__(self, config.JID, config.PASSWORD)
         self.commands = {}
         self.env = config.env
@@ -67,14 +68,14 @@ class SethBot(slixmpp.ClientXMPP):
             if self.room_settings[room]['autologin']:
                 pwd = self.room_settings[room].get('pwd')
                 if pwd:
-                    self.plugin['xep_0045'].joinMUC(room,
-                                                    self.room_settings[room]['nick'],
-                                                    password=pwd,
-                                                    wait=True)
+                    self.plugin['xep_0045'].join_muc(room,
+                                                     self.room_settings[room]['nick'],
+                                                     password=pwd,
+                                                     wait=True)
                 else:
-                    self.plugin['xep_0045'].joinMUC(room,
-                                                    self.room_settings[room]['nick'],
-                                                    wait=True)
+                    self.plugin['xep_0045'].join_muc(room,
+                                                     self.room_settings[room]['nick'],
+                                                     wait=True)
                 self.add_event_handler("muc::%s::got_online" % room,
                                        self.muc_online)
 
@@ -178,7 +179,7 @@ class SethBot(slixmpp.ClientXMPP):
         nick = presence['muc']['nick']
         role = presence['muc']['role']
         affiliation = presence['muc']['affiliation']
-        realjid = slixmpp.JID(self.plugin['xep_0045'].getJidProperty(room, nick, 'jid')).bare
+        realjid = slixmpp.JID(self.plugin['xep_0045'].get_jid_property(room, nick, 'jid')).bare
         if realjid and realjid in self.jid_access:
             self.room_settings[room]['access'][jid] = self.jid_access[realjid]
         else:
@@ -189,4 +190,4 @@ class SethBot(slixmpp.ClientXMPP):
         #                                       nick, self.room_settings[room]['access'][jid], realjid), presence)
 
     def register_cmd_handler(self, handler, cmd, access=2):
-        self.commands[cmd] = {'handler': handler, 'access': access}
+        self.commands[self.prefix + cmd] = {'handler': handler, 'access': access}

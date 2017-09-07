@@ -11,4 +11,5 @@ def leave_handler(bot, msg, cmd):
         bot.room_settings[room]['autologin'] = 0
         bot.del_event_handler("muc::%s::got_online" % room, bot.muc_online)
 
-bot.register_cmd_handler(leave_handler, '.leave', 50)
+
+bot.register_cmd_handler(leave_handler, 'leave', 50)

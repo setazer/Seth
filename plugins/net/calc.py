@@ -31,4 +31,5 @@ def calc_handler(bot, msg, cmd):
         rep = 'Выражение недопустимо'
     bot.reply(rep, msg)
 
-bot.register_cmd_handler(calc_handler, '.calc', 4)
+
+bot.register_cmd_handler(calc_handler, 'calc', 4)

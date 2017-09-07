@@ -10,5 +10,6 @@ def say_handler(bot, msg, cmd):
     msg['type']='groupchat'
     bot.reply(param.lstrip(), msg)
 
-bot.register_cmd_handler(echo_handler, '.echo', 3)
-bot.register_cmd_handler(say_handler, '.say', 4)
+
+bot.register_cmd_handler(echo_handler, 'echo', 3)
+bot.register_cmd_handler(say_handler, 'say', 4)

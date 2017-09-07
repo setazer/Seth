@@ -14,6 +14,7 @@ def true_handler(bot, msg, cmd):
         for tmp in param: idx += ord(tmp)
         idx = int((idx / 100.0 - int(idx / 100)) * 100)
         rep = 'Ваше утверждение верно с вероятностью ' + str(idx) + '%'
-    bot.reply(rep, msg)
+        bot.reply(rep, msg)
 
-bot.register_cmd_handler(true_handler, '.true', 3)
+
+bot.register_cmd_handler(true_handler, 'true', 3)

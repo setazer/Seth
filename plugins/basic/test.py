@@ -1,7 +1,8 @@
 def test_handler(bot, msg, cmd):
     bot.reply('passed', msg, True)
 
-bot.register_cmd_handler(test_handler, '.test')
+
+bot.register_cmd_handler(test_handler, 'test')
 
 
 # def test_jid_handler(t, s, p):
